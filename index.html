@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>뉴스 라이브</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#1a1a1a; color:#e0e0e0; font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif; }
+
+header {
+  background:#111; padding:0 20px; height:48px;
+  display:flex; align-items:center; gap:10px;
+  border-bottom:1px solid #2a2a2a;
+  position:sticky; top:0; z-index:200;
+}
+.logo { font-size:16px; font-weight:800; color:#fff; letter-spacing:-.5px; }
+.live-dot { width:8px; height:8px; background:#ff3b30; border-radius:50%; animation:blink 1.4s infinite; flex-shrink:0; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.main-area {
+  display:grid; grid-template-columns:1fr 340px;
+  background:#111; border-bottom:1px solid #2a2a2a;
+}
+.player-section { display:flex; flex-direction:column; }
+.player-box { position:relative; background:#000; aspect-ratio:16/9; width:100%; }
+.player-box iframe { width:100%; height:100%; border:none; display:block; }
+.player-placeholder {
+  width:100%; height:100%;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  gap:14px; color:#555;
+}
+.player-placeholder .big-icon { font-size:52px; }
+.player-placeholder p { font-size:14px; }
+
+.player-info { padding:12px 16px; background:#161616; border-top:1px solid #222; display:none; }
+.pi-title { font-size:15px; font-weight:700; color:#fff; display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.live-tag { background:#ff3b30; color:#fff; font-size:11px; font-weight:700; padding:2px 7px; border-radius:3px; letter-spacing:.5px; flex-shrink:0; }
+.pi-sub { font-size:12px; color:#888; display:flex; align-items:center; gap:6px; }
+.pi-broadcaster-icon { width:18px; height:18px; border-radius:50%; object-fit:cover; background:#333; }
+
+.chat-section { display:flex; flex-direction:column; border-left:1px solid #2a2a2a; background:#161616; }
+.chat-header { padding:12px 16px; font-size:14px; font-weight:700; color:#fff; border-bottom:1px solid #2a2a2a; display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.chat-frame-wrap { flex:1; min-height:0; position:relative; }
+.chat-frame-wrap iframe { width:100%; height:100%; border:none; display:block; }
+.chat-placeholder { width:100%; height:100%; min-height:300px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#444; gap:10px; padding:20px; text-align:center; }
+.chat-placeholder .ci { font-size:32px; }
+.chat-placeholder p { font-size:13px; line-height:1.6; }
+
+/* 채널 목록 */
+.channels-section { padding:20px; }
+.section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.section-title { font-size:15px; font-weight:700; color:#fff; display:flex; align-items:center; gap:8px; }
+.refresh-btn {
+  background:#2a2a2a; border:none; color:#aaa;
+  font-size:12px; padding:5px 12px; border-radius:5px;
+  cursor:pointer; display:flex; align-items:center; gap:5px;
+  transition:background .15s;
+}
+.refresh-btn:hover { background:#3a3a3a; color:#fff; }
+.refresh-btn.spinning .icon { display:inline-block; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* 라이브 / 오프라인 구분 섹션 */
+.ch-group-label {
+  font-size:12px; font-weight:700; letter-spacing:.5px;
+  margin:0 0 10px; padding-left:2px;
+}
+.ch-group-label.on { color:#ff6b6b; }
+.ch-group-label.off { color:#555; margin-top:20px; }
+
+.grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(185px,1fr)); gap:12px; margin-bottom:4px; }
+
+/* 카드 공통 */
+.card { background:#222; border-radius:8px; overflow:hidden; cursor:pointer; border:2px solid transparent; transition:border-color .15s, transform .15s, opacity .15s; }
+.card:hover { transform:translateY(-2px); }
+.card.active { border-color:#ff3b30 !important; }
+
+/* 라이브 카드 */
+.card.is-live:hover { border-color:#555; }
+
+/* 오프라인 카드 */
+.card.is-offline { opacity:.5; cursor:default; filter:grayscale(.6); }
+.card.is-offline:hover { transform:none; border-color:transparent; }
+.card.is-offline .thumb-live { background:#555 !important; }
+
+/* 로딩 중 카드 */
+.card.is-loading { opacity:.7; }
+
+.thumb { position:relative; aspect-ratio:16/9; background:#111; overflow:hidden; }
+.thumb img { width:100%; height:100%; object-fit:cover; display:block; transition:opacity .2s; }
+.thumb:hover img { opacity:.85; }
+.thumb-live {
+  position:absolute; top:7px; left:7px;
+  background:#ff3b30; color:#fff;
+  font-size:10px; font-weight:700;
+  padding:2px 6px; border-radius:3px; letter-spacing:.5px;
+}
+.thumb-offline-badge {
+  position:absolute; top:7px; left:7px;
+  background:#444; color:#aaa;
+  font-size:10px; font-weight:700;
+  padding:2px 6px; border-radius:3px; letter-spacing:.3px;
+  display:none;
+}
+.card.is-offline .thumb-live { display:none; }
+.card.is-offline .thumb-offline-badge { display:block; }
+
+.thumb-play { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .15s; background:rgba(0,0,0,.35); }
+.card.is-live:hover .thumb-play { opacity:1; }
+.play-btn { width:42px; height:42px; border-radius:50%; background:rgba(255,255,255,.9); display:flex; align-items:center; justify-content:center; font-size:16px; padding-left:3px; color:#111; }
+
+.card-body { padding:9px 11px 11px; }
+.card-broadcaster { font-size:11px; color:#ff6b6b; font-weight:700; margin-bottom:3px; letter-spacing:.2px; }
+.card.is-offline .card-broadcaster { color:#555; }
+.card-name { font-size:13px; color:#ddd; font-weight:600; line-height:1.3; }
+.card.is-offline .card-name { color:#666; }
+
+.status-dot { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+.status-dot.on { background:#ff3b30; animation:blink 1.4s infinite; }
+.status-dot.off { background:#555; }
+
+@media(max-width:800px) {
+  .main-area { grid-template-columns:1fr; }
+  .chat-section { border-left:none; border-top:1px solid #2a2a2a; height:360px; }
+  .chat-frame-wrap { height:300px; flex:none; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="live-dot"></div>
+  <div class="logo">📺 뉴스 라이브</div>
+</header>
+
+<div class="main-area">
+  <div class="player-section">
+    <div class="player-box">
+      <div class="player-placeholder" id="placeholder">
+        <div class="big-icon">📡</div>
+        <p>아래 채널을 선택하면 라이브가 시작됩니다</p>
+      </div>
+      <iframe id="playerFrame" style="display:none"
+        allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+    </div>
+    <div class="player-info" id="playerInfo">
+      <div class="pi-title">
+        <span class="live-tag">LIVE</span>
+        <span id="piTitle">—</span>
+      </div>
+      <div class="pi-sub">
+        <img class="pi-broadcaster-icon" id="piBroadcasterIcon" src="" alt="">
+        <span id="piBroadcaster">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-section">
+    <div class="chat-header">💬 라이브 채팅</div>
+    <div class="chat-frame-wrap">
+      <div class="chat-placeholder" id="chatPlaceholder">
+        <div class="ci">💬</div>
+        <p>채널을 선택하면<br>라이브 채팅이 표시됩니다</p>
+      </div>
+      <iframe id="chatFrame" style="display:none" allowfullscreen></iframe>
+    </div>
+  </div>
+</div>
+
+<div class="channels-section">
+  <div class="section-header">
+    <div class="section-title">
+      <span class="live-dot"></span>
+      채널 목록
+    </div>
+    <button class="refresh-btn" id="refreshBtn" onclick="checkAllLive()">
+      <span class="icon">↻</span> 상태 새로고침
+    </button>
+  </div>
+  <div id="channelList"></div>
+</div>
+
+<script>
+const channels = [
+  { name:"KBS 뉴스",     broadcaster:"KBS",    cid:"UCcQTRi69dsVYHN3exePtZ1A" },
+  { name:"KBS 2TV 뉴스", broadcaster:"KBS",    cid:"UC3m0s5XAQydCtbLHc8j1Uog" },
+  { name:"MBC 뉴스",     broadcaster:"MBC",    cid:"UCF4Wxdo3inmxP-Y59wXDsFw" },
+  { name:"SBS 뉴스",     broadcaster:"SBS",    cid:"UCkinYTS9IHqOEwR1Sze2JTw" },
+  { name:"YTN",          broadcaster:"YTN",    cid:"UChlgI3UHCOnwUGzWzbJ3H5w" },
+  { name:"연합뉴스TV",   broadcaster:"연합뉴스",cid:"UCTHCOPwqNfZ0uiKOvFyhGwg" },
+  { name:"JTBC 뉴스",    broadcaster:"JTBC",   cid:"UCsQAMERpGBdpEGUEgs_BrtQ" },
+  { name:"TV조선 뉴스",  broadcaster:"TV조선", cid:"UCWlV3Lz_55UaX4JsMj-z__Q" },
+  { name:"MBN 뉴스",     broadcaster:"MBN",    cid:"UCQhg0GOZ7kZKdEnZdVUh-AQ" },
+  { name:"채널A 뉴스",   broadcaster:"채널A",  cid:"UCfq4V1DAuaojnr2ryvWNysw" },
+  { name:"한국경제TV",   broadcaster:"한국경제",cid:"UCcRVITFBbvIDxCibpzSgkeg" },
+  { name:"매일경제TV",   broadcaster:"매일경제",cid:"UCJ_-Ql6OIBJpLx8Q1bJq27A" },
+  { name:"뉴스1",        broadcaster:"뉴스1",  cid:"UCdnclhQhGBJGSgGCrMlKOvA" },
+  { name:"뉴시스",       broadcaster:"뉴시스", cid:"UCe4gKtWiFsaqwfaA_O_VVLA" },
+];
+
+const colors = {
+  "KBS":"#1a4fd6","MBC":"#00a651","SBS":"#e8001d",
+  "YTN":"#004ea2","연합뉴스":"#c8a400","JTBC":"#e5007f",
+  "TV조선":"#1a5294","MBN":"#f57c00","채널A":"#00558b",
+  "한국경제":"#c00","매일경제":"#00338d","뉴스1":"#444","뉴시스":"#333"
+};
+
+// live 상태: null=미확인, true=라이브, false=오프라인
+const liveStatus = channels.map(() => null);
+let cardEls = [];
+
+function makeFallback(ch) {
+  const col = colors[ch.broadcaster] || '#333';
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='180'>
+    <defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'>
+      <stop offset='0' stop-color='${col}'/>
+      <stop offset='1' stop-color='${col}88'/>
+    </linearGradient></defs>
+    <rect width='320' height='180' fill='url(#g)'/>
+    <text x='50%' y='44%' text-anchor='middle' dy='.35em'
+      font-family='sans-serif' font-size='34' font-weight='800' fill='white' opacity='.95'>${ch.broadcaster}</text>
+    <text x='50%' y='70%' text-anchor='middle' dy='.35em'
+      font-family='sans-serif' font-size='13' fill='white' opacity='.7'>${ch.name}</text>
+  </svg>`;
+  return 'data:image/svg+xml,' + encodeURIComponent(svg);
+}
+
+// 라이브 썸네일 URL (라이브 중일 때만 이미지가 정상 로드됨)
+function liveThumbUrl(cid) {
+  return `https://i.ytimg.com/vi/live_stream/maxresdefault_live.jpg?channel_id=${cid}&t=${Date.now()}`;
+}
+
+// 단일 채널 라이브 여부 체크
+function checkLive(idx) {
+  return new Promise(resolve => {
+    const ch = channels[idx];
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    const timer = setTimeout(() => { img.src = ''; resolve(false); }, 5000);
+    img.onload = () => {
+      clearTimeout(timer);
+      // 유튜브가 라이브 아닐 때 반환하는 이미지는 120x90 이하의 placeholder
+      const isLive = img.naturalWidth > 200;
+      resolve(isLive);
+    };
+    img.onerror = () => { clearTimeout(timer); resolve(false); };
+    img.src = liveThumbUrl(ch.cid);
+  });
+}
+
+function applyStatus(idx, isLive) {
+  liveStatus[idx] = isLive;
+  const card = cardEls[idx];
+  if (!card) return;
+  card.classList.remove('is-loading','is-live','is-offline');
+  card.classList.add(isLive ? 'is-live' : 'is-offline');
+
+  // 라이브면 썸네일 교체
+  if (isLive) {
+    const img = card.querySelector('.thumb img');
+    img.src = liveThumbUrl(channels[idx].cid);
+  }
+
+  // 오프라인이면 클릭 막기
+  card.onclick = isLive ? () => selectChannel(idx) : null;
+}
+
+async function checkAllLive() {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  btn.disabled = true;
+
+  // 모두 loading 상태로
+  cardEls.forEach(c => { c.classList.remove('is-live','is-offline'); c.classList.add('is-loading'); });
+
+  await Promise.all(channels.map((_, i) =>
+    checkLive(i).then(ok => applyStatus(i, ok))
+  ));
+
+  renderSections();
+  btn.classList.remove('spinning');
+  btn.disabled = false;
+}
+
+// 라이브/오프라인 섹션으로 재정렬
+function renderSections() {
+  const list = document.getElementById('channelList');
+  const liveIdxs  = channels.map((_,i)=>i).filter(i => liveStatus[i] === true);
+  const offIdxs   = channels.map((_,i)=>i).filter(i => liveStatus[i] === false);
+  const unkIdxs   = channels.map((_,i)=>i).filter(i => liveStatus[i] === null);
+
+  list.innerHTML = '';
+
+  if (liveIdxs.length) {
+    const lbl = document.createElement('div');
+    lbl.className = 'ch-group-label on';
+    lbl.innerHTML = `<span class="status-dot on"></span>방송 중 (${liveIdxs.length})`;
+    list.appendChild(lbl);
+    const g = document.createElement('div'); g.className = 'grid';
+    liveIdxs.forEach(i => g.appendChild(cardEls[i]));
+    list.appendChild(g);
+  }
+
+  const otherIdxs = [...unkIdxs, ...offIdxs];
+  if (otherIdxs.length) {
+    const lbl = document.createElement('div');
+    lbl.className = 'ch-group-label off';
+    lbl.innerHTML = `<span class="status-dot off"></span>방송 종료 / 확인 중 (${otherIdxs.length})`;
+    list.appendChild(lbl);
+    const g = document.createElement('div'); g.className = 'grid';
+    otherIdxs.forEach(i => g.appendChild(cardEls[i]));
+    list.appendChild(g);
+  }
+}
+
+function selectChannel(idx) {
+  if (liveStatus[idx] === false) return;
+  const ch = channels[idx];
+
+  const pf = document.getElementById('playerFrame');
+  document.getElementById('placeholder').style.display = 'none';
+  pf.style.display = 'block';
+  pf.src = `https://www.youtube.com/embed/live_stream?channel=${ch.cid}&autoplay=1&rel=0`;
+
+  const cf = document.getElementById('chatFrame');
+  document.getElementById('chatPlaceholder').style.display = 'none';
+  cf.style.display = 'block';
+  cf.style.height = '100%';
+  cf.src = `https://www.youtube.com/live_chat?is_popout=1&dark_theme=1&channel=${ch.cid}`;
+
+  const pi = document.getElementById('playerInfo');
+  pi.style.display = 'block';
+  document.getElementById('piTitle').textContent = ch.name;
+  document.getElementById('piBroadcaster').textContent = ch.broadcaster;
+  const icon = document.getElementById('piBroadcasterIcon');
+  icon.src = `https://yt3.googleusercontent.com/channel/${ch.cid}`;
+  icon.onerror = () => { icon.style.display='none'; };
+
+  cardEls.forEach((c,i) => c.classList.toggle('active', i===idx));
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+// 초기 카드 생성
+function buildCards() {
+  channels.forEach((ch, i) => {
+    const card = document.createElement('div');
+    card.className = 'card is-loading';
+    card.innerHTML = `
+      <div class="thumb">
+        <img alt="${ch.name}" src="${makeFallback(ch)}" style="background:${colors[ch.broadcaster]||'#333'}22">
+        <div class="thumb-live">LIVE</div>
+        <div class="thumb-offline-badge">OFF AIR</div>
+        <div class="thumb-play"><div class="play-btn">▶</div></div>
+      </div>
+      <div class="card-body">
+        <div class="card-broadcaster">${ch.broadcaster}</div>
+        <div class="card-name">${ch.name}</div>
+      </div>
+    `;
+    cardEls.push(card);
+  });
+
+  // 초기에는 전체 그리드로 표시
+  const list = document.getElementById('channelList');
+  const lbl = document.createElement('div');
+  lbl.className = 'ch-group-label off';
+  lbl.innerHTML = `<span class="status-dot off"></span>상태 확인 중...`;
+  const g = document.createElement('div'); g.className = 'grid';
+  cardEls.forEach(c => g.appendChild(c));
+  list.appendChild(lbl);
+  list.appendChild(g);
+}
+
+buildCards();
+checkAllLive();
+</script>
+</body>
+</html>
