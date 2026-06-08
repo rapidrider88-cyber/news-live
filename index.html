@@ -48,78 +48,26 @@ header {
 .chat-placeholder .ci { font-size:32px; }
 .chat-placeholder p { font-size:13px; line-height:1.6; }
 
-/* 채널 목록 */
 .channels-section { padding:20px; }
-.section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
-.section-title { font-size:15px; font-weight:700; color:#fff; display:flex; align-items:center; gap:8px; }
-.refresh-btn {
-  background:#2a2a2a; border:none; color:#aaa;
-  font-size:12px; padding:5px 12px; border-radius:5px;
-  cursor:pointer; display:flex; align-items:center; gap:5px;
-  transition:background .15s;
-}
-.refresh-btn:hover { background:#3a3a3a; color:#fff; }
-.refresh-btn.spinning .icon { display:inline-block; animation:spin .8s linear infinite; }
-@keyframes spin { to { transform:rotate(360deg); } }
+.section-title { font-size:15px; font-weight:700; color:#fff; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
 
-/* 라이브 / 오프라인 구분 섹션 */
-.ch-group-label {
-  font-size:12px; font-weight:700; letter-spacing:.5px;
-  margin:0 0 10px; padding-left:2px;
-}
-.ch-group-label.on { color:#ff6b6b; }
-.ch-group-label.off { color:#555; margin-top:20px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(185px,1fr)); gap:12px; }
 
-.grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(185px,1fr)); gap:12px; margin-bottom:4px; }
-
-/* 카드 공통 */
-.card { background:#222; border-radius:8px; overflow:hidden; cursor:pointer; border:2px solid transparent; transition:border-color .15s, transform .15s, opacity .15s; }
-.card:hover { transform:translateY(-2px); }
+.card { background:#222; border-radius:8px; overflow:hidden; cursor:pointer; border:2px solid transparent; transition:border-color .15s, transform .15s; }
+.card:hover { border-color:#555; transform:translateY(-2px); }
 .card.active { border-color:#ff3b30 !important; }
-
-/* 라이브 카드 */
-.card.is-live:hover { border-color:#555; }
-
-/* 오프라인 카드 */
-.card.is-offline { opacity:.5; cursor:default; filter:grayscale(.6); }
-.card.is-offline:hover { transform:none; border-color:transparent; }
-.card.is-offline .thumb-live { background:#555 !important; }
-
-/* 로딩 중 카드 */
-.card.is-loading { opacity:.7; }
 
 .thumb { position:relative; aspect-ratio:16/9; background:#111; overflow:hidden; }
 .thumb img { width:100%; height:100%; object-fit:cover; display:block; transition:opacity .2s; }
 .thumb:hover img { opacity:.85; }
-.thumb-live {
-  position:absolute; top:7px; left:7px;
-  background:#ff3b30; color:#fff;
-  font-size:10px; font-weight:700;
-  padding:2px 6px; border-radius:3px; letter-spacing:.5px;
-}
-.thumb-offline-badge {
-  position:absolute; top:7px; left:7px;
-  background:#444; color:#aaa;
-  font-size:10px; font-weight:700;
-  padding:2px 6px; border-radius:3px; letter-spacing:.3px;
-  display:none;
-}
-.card.is-offline .thumb-live { display:none; }
-.card.is-offline .thumb-offline-badge { display:block; }
-
+.thumb-live { position:absolute; top:7px; left:7px; background:#ff3b30; color:#fff; font-size:10px; font-weight:700; padding:2px 6px; border-radius:3px; letter-spacing:.5px; }
 .thumb-play { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; opacity:0; transition:opacity .15s; background:rgba(0,0,0,.35); }
-.card.is-live:hover .thumb-play { opacity:1; }
+.card:hover .thumb-play { opacity:1; }
 .play-btn { width:42px; height:42px; border-radius:50%; background:rgba(255,255,255,.9); display:flex; align-items:center; justify-content:center; font-size:16px; padding-left:3px; color:#111; }
 
 .card-body { padding:9px 11px 11px; }
 .card-broadcaster { font-size:11px; color:#ff6b6b; font-weight:700; margin-bottom:3px; letter-spacing:.2px; }
-.card.is-offline .card-broadcaster { color:#555; }
 .card-name { font-size:13px; color:#ddd; font-weight:600; line-height:1.3; }
-.card.is-offline .card-name { color:#666; }
-
-.status-dot { display:inline-block; width:6px; height:6px; border-radius:50%; margin-right:4px; vertical-align:middle; }
-.status-dot.on { background:#ff3b30; animation:blink 1.4s infinite; }
-.status-dot.off { background:#555; }
 
 @media(max-width:800px) {
   .main-area { grid-template-columns:1fr; }
@@ -170,16 +118,11 @@ header {
 </div>
 
 <div class="channels-section">
-  <div class="section-header">
-    <div class="section-title">
-      <span class="live-dot"></span>
-      채널 목록
-    </div>
-    <button class="refresh-btn" id="refreshBtn" onclick="checkAllLive()">
-      <span class="icon">↻</span> 상태 새로고침
-    </button>
+  <div class="section-title">
+    <span class="live-dot"></span>
+    채널 목록
   </div>
-  <div id="channelList"></div>
+  <div class="grid" id="grid"></div>
 </div>
 
 <script>
@@ -207,10 +150,6 @@ const colors = {
   "한국경제":"#c00","매일경제":"#00338d","뉴스1":"#444","뉴시스":"#333"
 };
 
-// live 상태: null=미확인, true=라이브, false=오프라인
-const liveStatus = channels.map(() => null);
-let cardEls = [];
-
 function makeFallback(ch) {
   const col = colors[ch.broadcaster] || '#333';
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='180'>
@@ -227,96 +166,7 @@ function makeFallback(ch) {
   return 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
 
-// 라이브 썸네일 URL (라이브 중일 때만 이미지가 정상 로드됨)
-function liveThumbUrl(cid) {
-  return `https://i.ytimg.com/vi/live_stream/maxresdefault_live.jpg?channel_id=${cid}&t=${Date.now()}`;
-}
-
-// 단일 채널 라이브 여부 체크
-function checkLive(idx) {
-  return new Promise(resolve => {
-    const ch = channels[idx];
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    const timer = setTimeout(() => { img.src = ''; resolve(false); }, 5000);
-    img.onload = () => {
-      clearTimeout(timer);
-      // 유튜브가 라이브 아닐 때 반환하는 이미지는 120x90 이하의 placeholder
-      const isLive = img.naturalWidth > 200;
-      resolve(isLive);
-    };
-    img.onerror = () => { clearTimeout(timer); resolve(false); };
-    img.src = liveThumbUrl(ch.cid);
-  });
-}
-
-function applyStatus(idx, isLive) {
-  liveStatus[idx] = isLive;
-  const card = cardEls[idx];
-  if (!card) return;
-  card.classList.remove('is-loading','is-live','is-offline');
-  card.classList.add(isLive ? 'is-live' : 'is-offline');
-
-  // 라이브면 썸네일 교체
-  if (isLive) {
-    const img = card.querySelector('.thumb img');
-    img.src = liveThumbUrl(channels[idx].cid);
-  }
-
-  // 오프라인이면 클릭 막기
-  card.onclick = isLive ? () => selectChannel(idx) : null;
-}
-
-async function checkAllLive() {
-  const btn = document.getElementById('refreshBtn');
-  btn.classList.add('spinning');
-  btn.disabled = true;
-
-  // 모두 loading 상태로
-  cardEls.forEach(c => { c.classList.remove('is-live','is-offline'); c.classList.add('is-loading'); });
-
-  await Promise.all(channels.map((_, i) =>
-    checkLive(i).then(ok => applyStatus(i, ok))
-  ));
-
-  renderSections();
-  btn.classList.remove('spinning');
-  btn.disabled = false;
-}
-
-// 라이브/오프라인 섹션으로 재정렬
-function renderSections() {
-  const list = document.getElementById('channelList');
-  const liveIdxs  = channels.map((_,i)=>i).filter(i => liveStatus[i] === true);
-  const offIdxs   = channels.map((_,i)=>i).filter(i => liveStatus[i] === false);
-  const unkIdxs   = channels.map((_,i)=>i).filter(i => liveStatus[i] === null);
-
-  list.innerHTML = '';
-
-  if (liveIdxs.length) {
-    const lbl = document.createElement('div');
-    lbl.className = 'ch-group-label on';
-    lbl.innerHTML = `<span class="status-dot on"></span>방송 중 (${liveIdxs.length})`;
-    list.appendChild(lbl);
-    const g = document.createElement('div'); g.className = 'grid';
-    liveIdxs.forEach(i => g.appendChild(cardEls[i]));
-    list.appendChild(g);
-  }
-
-  const otherIdxs = [...unkIdxs, ...offIdxs];
-  if (otherIdxs.length) {
-    const lbl = document.createElement('div');
-    lbl.className = 'ch-group-label off';
-    lbl.innerHTML = `<span class="status-dot off"></span>방송 종료 / 확인 중 (${otherIdxs.length})`;
-    list.appendChild(lbl);
-    const g = document.createElement('div'); g.className = 'grid';
-    otherIdxs.forEach(i => g.appendChild(cardEls[i]));
-    list.appendChild(g);
-  }
-}
-
 function selectChannel(idx) {
-  if (liveStatus[idx] === false) return;
   const ch = channels[idx];
 
   const pf = document.getElementById('playerFrame');
@@ -330,51 +180,35 @@ function selectChannel(idx) {
   cf.style.height = '100%';
   cf.src = `https://www.youtube.com/live_chat?is_popout=1&dark_theme=1&channel=${ch.cid}`;
 
-  const pi = document.getElementById('playerInfo');
-  pi.style.display = 'block';
+  document.getElementById('playerInfo').style.display = 'block';
   document.getElementById('piTitle').textContent = ch.name;
   document.getElementById('piBroadcaster').textContent = ch.broadcaster;
   const icon = document.getElementById('piBroadcasterIcon');
   icon.src = `https://yt3.googleusercontent.com/channel/${ch.cid}`;
   icon.onerror = () => { icon.style.display='none'; };
 
-  cardEls.forEach((c,i) => c.classList.toggle('active', i===idx));
+  document.querySelectorAll('.card').forEach((c,i) => c.classList.toggle('active', i===idx));
   window.scrollTo({ top:0, behavior:'smooth' });
 }
 
-// 초기 카드 생성
-function buildCards() {
-  channels.forEach((ch, i) => {
-    const card = document.createElement('div');
-    card.className = 'card is-loading';
-    card.innerHTML = `
-      <div class="thumb">
-        <img alt="${ch.name}" src="${makeFallback(ch)}" style="background:${colors[ch.broadcaster]||'#333'}22">
-        <div class="thumb-live">LIVE</div>
-        <div class="thumb-offline-badge">OFF AIR</div>
-        <div class="thumb-play"><div class="play-btn">▶</div></div>
-      </div>
-      <div class="card-body">
-        <div class="card-broadcaster">${ch.broadcaster}</div>
-        <div class="card-name">${ch.name}</div>
-      </div>
-    `;
-    cardEls.push(card);
-  });
-
-  // 초기에는 전체 그리드로 표시
-  const list = document.getElementById('channelList');
-  const lbl = document.createElement('div');
-  lbl.className = 'ch-group-label off';
-  lbl.innerHTML = `<span class="status-dot off"></span>상태 확인 중...`;
-  const g = document.createElement('div'); g.className = 'grid';
-  cardEls.forEach(c => g.appendChild(c));
-  list.appendChild(lbl);
-  list.appendChild(g);
-}
-
-buildCards();
-checkAllLive();
+const grid = document.getElementById('grid');
+channels.forEach((ch, i) => {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <div class="thumb">
+      <img alt="${ch.name}" src="${makeFallback(ch)}">
+      <div class="thumb-live">LIVE</div>
+      <div class="thumb-play"><div class="play-btn">▶</div></div>
+    </div>
+    <div class="card-body">
+      <div class="card-broadcaster">${ch.broadcaster}</div>
+      <div class="card-name">${ch.name}</div>
+    </div>
+  `;
+  card.addEventListener('click', () => selectChannel(i));
+  grid.appendChild(card);
+});
 </script>
 </body>
 </html>
